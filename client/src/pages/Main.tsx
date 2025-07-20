@@ -4,22 +4,21 @@ import { ChatMessage } from '../components/ChatMessage';
 import { CustomerCard } from '../components/CustomerCard';
 import { CustomerModal } from '../components/CustomerModal';
 import { SalesBot } from '../services/salesBot';
+import { fetchEventSource } from "@microsoft/fetch-event-source";
 import { ChatMessage as ChatMessageType, Customer, Communication, ChatMessage as ChatI } from '../types/Customer';
 import { mockCommunications } from '../data/mockData';
-import axios from 'axios';
 
 function Main() {
   const [messages, setMessages] = useState<ChatMessageType[]>([]);
   const [input, setInput] = useState('');
-//   const [email, setEmail] = useState<string | null>(null);
   const [isLoading, setIsLoading] = useState(false);
   const [activeTab, setActiveTab] = useState<'chat' | 'customers' | 'stats'>('chat');
   const [selectedCustomer, setSelectedCustomer] = useState<Customer | null>(null);
   const [searchTerm, setSearchTerm] = useState('');
-  
+
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const salesBot = new SalesBot();
-  
+
   const scrollToBottom = () => {
     messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
   };
@@ -28,53 +27,88 @@ function Main() {
     scrollToBottom();
   }, [messages]);
 
-  const handleSendMessage = async () => {
-    if (!input.trim()) return;
+const handleSendMessage = async () => {
+  if (!input.trim()) return;
 
-    const userMessage: ChatI = {
-      id: Date.now().toString(),
-      type: 'user',
-      content: input,
-      timestamp: new Date().toISOString()
-    };
+  const userMessage: ChatI = {
+    id: Date.now().toString(),
+    type: "user",
+    content: input,
+    timestamp: new Date().toISOString(),
+  };
+  setMessages(prev => [...prev, userMessage]);
+  setIsLoading(true);
+  setInput("");
 
-    setMessages(prev => [...prev, userMessage]);
+  await fetchEventSource("http://localhost:8000/query", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ query: input.trim(), email: "workingforrahul@gmail.com" }),
+    credentials: "include",
+    onmessage(event) {
+      console.log("Event:", event.event, event.data);
+      try {
+        const parsed = JSON.parse(event.data);
 
-    setIsLoading(true);
-    setInput('');
-
-    try {
-      const res = await axios.post('http://localhost:8000/query', {
-        query:input.trim()
-      },{
-        withCredentials:true
-      });
-      console.log(res)
-      const data = await res.data;
-
-      setMessages(prev => [
-        ...prev,
-        {
-          id: Date.now().toString(),
-          type: 'bot',
-          content: data.answer || 'Sorry, no response.',
-          timestamp: new Date().toISOString()
+        switch (event.event) {
+          case "starting_agent":
+            addBotMessage(`Hi I am Sales Assit....`, true);
+            break;
+          case "customer_name":
+            addBotMessage(`I identified Customer name as ${parsed.customer_name}.`);
+            break;
+          case "customer_name_1":
+            addBotMessage(`${parsed.message}`);
+            break;
+          case "email_count_1":
+            addBotMessage(`${parsed.message}`);
+            break;
+          case "context_ready_1":
+            addBotMessage(`${parsed.message}`);
+            break;
+          case "summary_1":
+            addBotMessage(`${parsed.message}`);
+            break;
+          case "email_count":
+            addBotMessage(`${parsed.count >=1 ? `Yayyy! I got ${parsed.count} emails while reading.` : "I found 0 emails. Maybe you forgot to send!"}`);
+            break;
+          case "context_ready":
+            // context object rendering
+            addBotMessage({ context: parsed.context }, true);
+            break;
+          case "summary":
+            addBotMessage(parsed); // Parsed summary object; see ChatMessage for rendering
+            break;
+          case "completed":
+            setIsLoading(false);
+            break;
         }
-      ]);
-    } catch (err) {
-      setMessages(prev => [
-        ...prev,
-        {
-          id: Date.now().toString(),
-          type: 'bot',
-          content: 'Something went wrong!',
-          timestamp: new Date().toISOString()
-        }
-      ]);
-    } finally {
+      } catch (err) {
+        console.error("Error parsing SSE event:", err);
+        setIsLoading(false);
+      }
+    },
+    onerror(err) {
+      console.error("Error:", err);
       setIsLoading(false);
     }
-  };
+  });
+};
+
+const addBotMessage = (text: string | object, isStatus = false) => {
+  setMessages(prev => [
+    ...prev,
+    {
+      id: Date.now().toString(),
+      type: "bot",
+      content: text,
+      timestamp: new Date().toISOString(),
+      isStatus,
+    }
+  ]);
+};
+
+
   const handleKeyPress = (e: React.KeyboardEvent) => {
     if (e.key === 'Enter' && !e.shiftKey) {
       e.preventDefault();
@@ -93,20 +127,15 @@ function Main() {
     return mockCommunications.filter(comm => comm.customerId === customerId);
   };
 
-  const getSalesStats = () => {
-    const stats = {
-      totalCustomers: customers.length,
-      leads: customers.filter(c => c.status === 'lead').length,
-      prospects: customers.filter(c => c.status === 'prospect').length,
-      activeCustomers: customers.filter(c => c.status === 'customer').length,
-      churned: customers.filter(c => c.status === 'churned').length,
-      totalValue: customers.reduce((sum, c) => sum + c.value, 0),
-      avgValue: customers.reduce((sum, c) => sum + c.value, 0) / customers.length
-    };
-    return stats;
+  const stats = {
+    totalCustomers: customers.length,
+    leads: customers.filter(c => c.status === 'lead').length,
+    prospects: customers.filter(c => c.status === 'prospect').length,
+    activeCustomers: customers.filter(c => c.status === 'customer').length,
+    churned: customers.filter(c => c.status === 'churned').length,
+    totalValue: customers.reduce((sum, c) => sum + c.value, 0),
+    avgValue: customers.reduce((sum, c) => sum + c.value, 0) / customers.length
   };
-
-  const stats = getSalesStats();
 
   return (
     <div className="min-h-screen bg-gray-50">
@@ -119,39 +148,21 @@ function Main() {
               <h1 className="text-xl font-semibold text-gray-900">Sales Assistant</h1>
             </div>
             <nav className="flex space-x-1">
-              <button
-                onClick={() => setActiveTab('chat')}
-                className={`px-4 py-2 rounded-lg font-medium transition-colors ${
-                  activeTab === 'chat' 
-                    ? 'bg-blue-100 text-blue-700' 
+              {['chat', 'customers', 'stats'].map(tab => (
+                <button
+                  key={tab}
+                  onClick={() => setActiveTab(tab as any)}
+                  className={`px-4 py-2 rounded-lg font-medium transition-colors ${activeTab === tab
+                    ? 'bg-blue-100 text-blue-700'
                     : 'text-gray-600 hover:text-gray-900 hover:bg-gray-100'
-                }`}
-              >
-                <MessageSquare className="inline-block w-4 h-4 mr-2" />
-                Chat
-              </button>
-              <button
-                onClick={() => setActiveTab('customers')}
-                className={`px-4 py-2 rounded-lg font-medium transition-colors ${
-                  activeTab === 'customers' 
-                    ? 'bg-blue-100 text-blue-700' 
-                    : 'text-gray-600 hover:text-gray-900 hover:bg-gray-100'
-                }`}
-              >
-                <Users className="inline-block w-4 h-4 mr-2" />
-                Customers
-              </button>
-              <button
-                onClick={() => setActiveTab('stats')}
-                className={`px-4 py-2 rounded-lg font-medium transition-colors ${
-                  activeTab === 'stats' 
-                    ? 'bg-blue-100 text-blue-700' 
-                    : 'text-gray-600 hover:text-gray-900 hover:bg-gray-100'
-                }`}
-              >
-                <BarChart3 className="inline-block w-4 h-4 mr-2" />
-                Analytics
-              </button>
+                    }`}
+                >
+                  {tab === 'chat' && <MessageSquare className="inline-block w-4 h-4 mr-2" />}
+                  {tab === 'customers' && <Users className="inline-block w-4 h-4 mr-2" />}
+                  {tab === 'stats' && <BarChart3 className="inline-block w-4 h-4 mr-2" />}
+                  {tab.charAt(0).toUpperCase() + tab.slice(1)}
+                </button>
+              ))}
             </nav>
           </div>
         </div>
@@ -164,7 +175,7 @@ function Main() {
             <div className="bg-white rounded-lg shadow-sm border border-gray-200 h-[600px] flex flex-col">
               {/* Chat Messages */}
               <div className="flex-1 overflow-y-auto p-6 space-y-4">
-                {messages && messages.map((message) => (
+                {messages.map((message) => (
                   <ChatMessage key={message.id} message={message} />
                 ))}
                 {isLoading && (
@@ -221,7 +232,7 @@ function Main() {
                 />
               </div>
             </div>
-            
+
             <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
               {filteredCustomers.map((customer) => (
                 <CustomerCard
@@ -237,94 +248,30 @@ function Main() {
         {activeTab === 'stats' && (
           <div>
             <h2 className="text-2xl font-bold text-gray-900 mb-6">Sales Analytics</h2>
-            
+            {/* Stats Cards */}
             <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6 mb-8">
-              <div className="bg-white rounded-lg shadow-sm border border-gray-200 p-6">
-                <div className="flex items-center justify-between">
-                  <div>
-                    <p className="text-sm font-medium text-gray-600">Total Customers</p>
-                    <p className="text-2xl font-bold text-gray-900">{stats.totalCustomers}</p>
-                  </div>
-                  <Users className="h-8 w-8 text-blue-600" />
-                </div>
-              </div>
-              
-              <div className="bg-white rounded-lg shadow-sm border border-gray-200 p-6">
-                <div className="flex items-center justify-between">
-                  <div>
-                    <p className="text-sm font-medium text-gray-600">Active Customers</p>
-                    <p className="text-2xl font-bold text-green-600">{stats.activeCustomers}</p>
-                  </div>
-                  <Users className="h-8 w-8 text-green-600" />
-                </div>
-              </div>
-              
-              <div className="bg-white rounded-lg shadow-sm border border-gray-200 p-6">
-                <div className="flex items-center justify-between">
-                  <div>
-                    <p className="text-sm font-medium text-gray-600">Total Value</p>
-                    <p className="text-2xl font-bold text-blue-600">${stats.totalValue.toLocaleString()}</p>
-                  </div>
-                  <BarChart3 className="h-8 w-8 text-blue-600" />
-                </div>
-              </div>
-              
-              <div className="bg-white rounded-lg shadow-sm border border-gray-200 p-6">
-                <div className="flex items-center justify-between">
-                  <div>
-                    <p className="text-sm font-medium text-gray-600">Avg Value</p>
-                    <p className="text-2xl font-bold text-purple-600">${Math.round(stats.avgValue).toLocaleString()}</p>
-                  </div>
-                  <BarChart3 className="h-8 w-8 text-purple-600" />
-                </div>
-              </div>
-            </div>
-            
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-              <div className="bg-white rounded-lg shadow-sm border border-gray-200 p-6">
-                <h3 className="text-lg font-semibold text-gray-900 mb-4">Customer Status Distribution</h3>
-                <div className="space-y-3">
+              {/* Cards for stats */}
+              {[
+                { label: "Total Customers", value: stats.totalCustomers, color: "text-gray-900", icon: <Users className="h-8 w-8 text-blue-600" /> },
+                { label: "Active Customers", value: stats.activeCustomers, color: "text-green-600", icon: <Users className="h-8 w-8 text-green-600" /> },
+                { label: "Total Value", value: `$${stats.totalValue.toLocaleString()}`, color: "text-blue-600", icon: <BarChart3 className="h-8 w-8 text-blue-600" /> },
+                { label: "Avg Value", value: `$${Math.round(stats.avgValue).toLocaleString()}`, color: "text-purple-600", icon: <BarChart3 className="h-8 w-8 text-purple-600" /> }
+              ].map((stat, i) => (
+                <div key={i} className="bg-white rounded-lg shadow-sm border border-gray-200 p-6">
                   <div className="flex items-center justify-between">
-                    <span className="text-sm text-gray-600">Leads</span>
-                    <span className="text-sm font-medium text-yellow-600">{stats.leads}</span>
-                  </div>
-                  <div className="flex items-center justify-between">
-                    <span className="text-sm text-gray-600">Prospects</span>
-                    <span className="text-sm font-medium text-blue-600">{stats.prospects}</span>
-                  </div>
-                  <div className="flex items-center justify-between">
-                    <span className="text-sm text-gray-600">Active Customers</span>
-                    <span className="text-sm font-medium text-green-600">{stats.activeCustomers}</span>
-                  </div>
-                  <div className="flex items-center justify-between">
-                    <span className="text-sm text-gray-600">Churned</span>
-                    <span className="text-sm font-medium text-red-600">{stats.churned}</span>
-                  </div>
-                </div>
-              </div>
-              
-              <div className="bg-white rounded-lg shadow-sm border border-gray-200 p-6">
-                <h3 className="text-lg font-semibold text-gray-900 mb-4">Recent Activity</h3>
-                <div className="space-y-3">
-                  {customers.slice(0, 4).map((customer) => (
-                    <div key={customer.id} className="flex items-center justify-between">
-                      <div>
-                        <p className="text-sm font-medium text-gray-900">{customer.name}</p>
-                        <p className="text-xs text-gray-500">{customer.company}</p>
-                      </div>
-                      <span className="text-xs text-gray-500">
-                        {new Date(customer.lastContact).toLocaleDateString()}
-                      </span>
+                    <div>
+                      <p className="text-sm font-medium text-gray-600">{stat.label}</p>
+                      <p className={`text-2xl font-bold ${stat.color}`}>{stat.value}</p>
                     </div>
-                  ))}
+                    {stat.icon}
+                  </div>
                 </div>
-              </div>
+              ))}
             </div>
           </div>
         )}
       </main>
 
-      {/* Customer Modal */}
       {selectedCustomer && (
         <CustomerModal
           customer={selectedCustomer}

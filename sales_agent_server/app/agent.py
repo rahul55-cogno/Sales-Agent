@@ -70,7 +70,7 @@ def get_senders_name(s:State):
     query=s['query']
     prompt = ChatPromptTemplate.from_messages(
     [
-        ("system", "I am giving you users query you have to extract name of the user for which user is querying about. Just return the name or None"),
+        ("system", "I am giving you users query you have to extract name of the user for which user is querying about. Just return the name or None."),
         ("user","Question:{question}")
     ]
 )

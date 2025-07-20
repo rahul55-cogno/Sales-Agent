@@ -3,6 +3,7 @@ import Main from './pages/Main';
 import { GoogleSignIn } from './components/GoogleSignIn';
 import { AuthLayout } from './components/AuthLayout';
 import { useState } from 'react';
+import Landing from './pages/Landing';
 
 
 const App = () => {
@@ -21,6 +22,7 @@ const App = () => {
     <BrowserRouter>
       <Routes>
         <Route element={<Main />} path='/' />
+        <Route element={<Landing />} path='/home' />
         <Route element={<AuthLayout>
           <GoogleSignIn />
         </AuthLayout>}

@@ -24,7 +24,8 @@ export interface Communication {
 export interface ChatMessage {
   id: string;
   type: 'user' | 'bot';
-  content: string;
+  content: any;
   timestamp: string;
   data?: any;
+  isStatus?:boolean
 }

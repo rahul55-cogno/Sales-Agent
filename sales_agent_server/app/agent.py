@@ -77,7 +77,6 @@ def get_senders_name(s:State):
     output_parser=StrOutputParser()
     chain=prompt|llm|output_parser
     response=chain.invoke({'question':query})
-    print("Senders name",response)
     return {
         "customer_name":[response],
     }
@@ -85,16 +84,17 @@ def get_senders_name(s:State):
 def refine_results_with_llm(s:State):
     query=s['query']
     data=s['context_data']
-    print('context',data)
     prompt = ChatPromptTemplate.from_messages(
     [
-        ("system", "You are a helpful assistant. Answer the user's question strictly using only the following email context:\n\n{data}. You can answer from attachments as well. Make sure you give detailed information about users query. If you are returning multiple information about multiple emails then mention from which email you picked it, I mean its subject, date time etc.. But also make sure that you should behave like user is not talking to a bot. If you don't know the answer say I can't found your answer in the email context. **Please go through all emails no information should be left.**"),
-        ("user","Question:{question}")
+        ("system", 
+        "You are a helpful assistant. Using only the information provided in the following emails:\n\n{data}\n\ncreate a summary in exactly two clear and comprehensive paragraphs. Your summary should cover all the important points, decisions, and discussions present in the emails, merging the content into a logical, human-readable overview without referencing email names, dates, or any external information. Do not use bullet points, lists, or any formatting that requires external support. Focus on clarity and depth, keeping the total length between 200 and 300 words. Separate the two paragraphs with \n in between"),
+        ("user", "Question: {question}")
     ]
 )
     output_parser=StrOutputParser()
     chain=prompt|llm|output_parser
     response=chain.invoke({'question':query,'data': data})
+    # print(response)
     return {
         "messages":[response],
     }
@@ -105,7 +105,7 @@ os.environ["GOOGLE_API_KEY"] = os.getenv("GOOGLE_API_KEY")
 
 from langchain_groq import ChatGroq
 
-llm=ChatGroq(model="llama-3.1-8b-instant")
+llm=ChatGroq(model="llama-3.3-70b-versatile")
 
 graph = StateGraph(State)
 

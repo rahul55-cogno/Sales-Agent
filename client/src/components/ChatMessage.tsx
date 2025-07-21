@@ -47,6 +47,18 @@ function linkify(content: any): React.ReactNode {
   return null;
 }
 
+function renderStringAsParagraphs(text: string) {
+  // Split string by double newlines for paragraphs
+  return text
+    .split(/\n{2,}/)   // two or more newlines = new paragraph
+    .map((para, idx) => (
+      <p key={idx} className="mb-3">
+        {linkify(para)}
+      </p>
+    ));
+}
+
+
 // --- Expander for context objects; collapsed by default ---
 function ContextExpander({ context }: { context: any }) {
   const [open, setOpen] = useState(false);
@@ -72,7 +84,7 @@ function ContextExpander({ context }: { context: any }) {
 }
 
 // --- Main chat message renderer ---
-export const ChatMessage = ({ message }:{message:any}) => {
+export const ChatMessage = ({ message }: { message: any }) => {
   const isBot = message.type === "bot";
   const isStatus = message.isStatus === true;
 
@@ -84,7 +96,7 @@ export const ChatMessage = ({ message }:{message:any}) => {
   ) {
     return (
       <div className="flex justify-start mb-4">
-        <div className="flex max-w-[80%]">
+        <div className="flex w-full">
           {/* Bot avatar */}
           <div className="flex-shrink-0 mr-3">
             <div className="w-8 h-8 rounded-full bg-blue-500 text-white flex items-center justify-center">
@@ -115,40 +127,39 @@ export const ChatMessage = ({ message }:{message:any}) => {
       className={`flex ${isBot ? "justify-start" : "justify-end"} mb-4`}
     >
       <div
-        className={`flex max-w-[80%] ${
-          isBot ? "flex-row" : "flex-row-reverse"
-        }`}
+        className={`flex max-w-[80%] ${isBot ? "flex-row" : "flex-row-reverse"
+          }`}
       >
         {/* Avatar */}
         <div className={`flex-shrink-0 ${isBot ? "mr-3" : "ml-3"}`}>
           <div
-            className={`w-8 h-8 rounded-full flex items-center justify-center ${
-              isBot ? "bg-blue-500" : "bg-gray-500"
-            } text-white`}
+            className={`w-8 h-8 rounded-full flex items-center justify-center ${isBot ? "bg-blue-500" : "bg-gray-500"
+              } text-white`}
           >
             {isBot ? <Bot size={16} /> : <User size={16} />}
           </div>
         </div>
         {/* Message bubble */}
         <div
-          className={`rounded-2xl px-4 py-3 shadow-sm ${
-            isBot
+          className={`rounded-2xl px-4 py-3 shadow-sm ${isBot
               ? "bg-white border border-gray-200 text-gray-800 font-sans"
               : "bg-blue-500 text-white font-medium"
-          } max-w-xs md:max-w-md`}
+            } w-full`}
           style={{
             fontStyle: isStatus ? "italic" : "normal",
-            fontSize: isBot ? "15px" : "16px",
+            fontSize: isBot ? "310px" : "130px",
             color: isStatus ? "#6B7280" : undefined,
           }}
         >
-          <div className="text-sm leading-relaxed break-words">
-            {linkify(message.content)}
+          <div className="text-lg leading-relaxed break-words">
+            {typeof message.content === "string"
+              ? renderStringAsParagraphs(message.content)
+              : linkify(message.content)
+            }
           </div>
           <div
-            className={`flex items-center mt-2 text-xs ${
-              isBot ? "text-gray-500" : "text-blue-100"
-            }`}
+            className={`flex items-center mt-2 text-xs ${isBot ? "text-gray-500" : "text-blue-100"
+              }`}
           >
             <Clock size={12} className="mr-1" />
             {new Date(message.timestamp).toLocaleTimeString([], {

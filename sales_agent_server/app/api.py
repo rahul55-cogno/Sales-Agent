@@ -102,10 +102,9 @@ def event_stream(query, user_email):
             yield f"event: summary_1\ndata: {json.dumps({"message":"Thanks for Patience. Your final response is almose ready...."})}\n\n"
             time.sleep(1.6)
             summary_text = event['messages'][-1].content
+            print(summary_text)
             formatted_summary = {
-                "title": "Customer Communication Summary",
-                "customer": event.get('customer_name', 'Unknown'),
-                "emails": [line.strip() for line in summary_text.split("\n") if line.strip()]
+                "message": summary_text
             }
             yield f"event: summary\ndata: {json.dumps(formatted_summary)}\n\n"
             sent_flags['final_answer'] = True

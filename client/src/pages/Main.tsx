@@ -27,86 +27,81 @@ function Main() {
     scrollToBottom();
   }, [messages]);
 
-const handleSendMessage = async () => {
-  if (!input.trim()) return;
+  const handleSendMessage = async () => {
+    if (!input.trim()) return;
 
-  const userMessage: ChatI = {
-    id: Date.now().toString(),
-    type: "user",
-    content: input,
-    timestamp: new Date().toISOString(),
-  };
-  setMessages(prev => [...prev, userMessage]);
-  setIsLoading(true);
-  setInput("");
+    const userMessage: ChatI = {
+      id: Date.now().toString(),
+      type: "user",
+      content: input,
+      timestamp: new Date().toISOString(),
+    };
+    setMessages(prev => [...prev, userMessage]);
+    setIsLoading(true);
+    setInput("");
 
-  await fetchEventSource("http://localhost:8000/query", {
-    method: "POST",
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({ query: input.trim(), email: "workingforrahul@gmail.com" }),
-    credentials: "include",
-    onmessage(event) {
-      console.log("Event:", event.event, event.data);
-      try {
-        const parsed = JSON.parse(event.data);
+    await fetchEventSource("http://localhost:8000/query", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ query: input.trim(), email: "workingforrahul@gmail.com" }),
+      credentials: "include",
+      onmessage(event) {
+        console.log("Event:", event.event, event.data);
+        try {
+          const parsed = JSON.parse(event.data);
+          console.log(parsed)
 
-        switch (event.event) {
-          case "starting_agent":
-            addBotMessage(`Hi I am Sales Assit....`, true);
-            break;
-          case "customer_name":
-            addBotMessage(`I identified Customer name as ${parsed.customer_name}.`);
-            break;
-          case "customer_name_1":
-            addBotMessage(`${parsed.message}`);
-            break;
-          case "email_count_1":
-            addBotMessage(`${parsed.message}`);
-            break;
-          case "context_ready_1":
-            addBotMessage(`${parsed.message}`);
-            break;
-          case "summary_1":
-            addBotMessage(`${parsed.message}`);
-            break;
-          case "email_count":
-            addBotMessage(`${parsed.count >=1 ? `Yayyy! I got ${parsed.count} emails while reading.` : "I found 0 emails. Maybe you forgot to send!"}`);
-            break;
-          case "context_ready":
-            // context object rendering
-            addBotMessage({ context: parsed.context }, true);
-            break;
-          case "summary":
-            addBotMessage(parsed); // Parsed summary object; see ChatMessage for rendering
-            break;
-          case "completed":
-            setIsLoading(false);
-            break;
+          switch (event.event) {
+            case "starting_agent":
+              addBotMessage(`Hi I am Sales Assit....`, true);
+              break;
+            case "customer_name":
+              addBotMessage(`I identified Customer name as ${parsed.customer_name}.`);
+              break;
+            case "customer_name_1":
+              addBotMessage(`${parsed.message}`);
+              break;
+            case "email_count_1":
+              addBotMessage(`${parsed.message}`);
+              break;
+              break;
+            case "summary_1":
+              addBotMessage(`${parsed.message}`);
+              break;
+            case "email_count":
+              addBotMessage(`${parsed.count >= 1 ? `Yayyy! I got ${parsed.count} emails while reading.` : "I found 0 emails. Maybe you forgot to send!"}`);
+              break;
+            case "summary":
+              addBotMessage(parsed.message); 
+              break;
+            case "completed":
+              setIsLoading(false);
+              break;
+          }
+        } catch (err) {
+          console.error("Error parsing SSE event:", err);
+          setIsLoading(false);
         }
-      } catch (err) {
-        console.error("Error parsing SSE event:", err);
+      },
+      onerror(err) {
+        console.error("Error:", err);
         setIsLoading(false);
       }
-    },
-    onerror(err) {
-      console.error("Error:", err);
-      setIsLoading(false);
-    }
-  });
-};
+    });
+  };
 
-const addBotMessage = (text: string | object, isStatus = false) => {
-  setMessages(prev => [
-    ...prev,
-    {
-      id: Date.now().toString(),
-      type: "bot",
-      content: text,
-      timestamp: new Date().toISOString(),
-      isStatus,
-    }
-  ]);
-};
+  const addBotMessage = (text: string | object, isStatus = false) => {
+    setMessages(prev => [
+      ...prev,
+      {
+        id: Date.now().toString(),
+        type: "bot",
+        content: text,
+        timestamp: new Date().toISOString(),
+        isStatus,
+      }
+    ]);
+  };
 
 
   const handleKeyPress = (e: React.KeyboardEvent) => {
@@ -169,11 +164,17 @@ const addBotMessage = (text: string | object, isStatus = false) => {
       </header>
 
       {/* Main Content */}
-      <main className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
+      <main className="w-full mx-auto px-4 sm:px-6 lg:px-8 py-8">
         {activeTab === 'chat' && (
-          <div className="max-w-4xl mx-auto">
-            <div className="bg-white rounded-lg shadow-sm border border-gray-200 h-[600px] flex flex-col">
+          <div className="w-[75vw] mx-auto">
+            <div className="bg-white rounded-lg shadow-sm border border-gray-200 h-[85vh] flex flex-col ">
               {/* Chat Messages */}
+              {
+                messages.length===0 &&
+                <div className='h-full w-full flex justify-center items-center'>
+                  <p className='text-[1.25rem] text-blue-500 font-semibold'>Hello, How can I help you today?</p>
+                </div>
+              }
               <div className="flex-1 overflow-y-auto p-6 space-y-4">
                 {messages.map((message) => (
                   <ChatMessage key={message.id} message={message} />
@@ -201,7 +202,7 @@ const addBotMessage = (text: string | object, isStatus = false) => {
                     onChange={(e) => setInput(e.target.value)}
                     onKeyPress={handleKeyPress}
                     placeholder="Ask me about customers, communications, or sales data..."
-                    className="flex-1 px-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                    className="flex-1 px-4 py-2 border border-gray-800 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
                     disabled={isLoading}
                   />
                   <button

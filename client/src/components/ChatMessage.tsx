@@ -86,7 +86,7 @@ function ContextExpander({ context }: { context: any }) {
 // --- Main chat message renderer ---
 export const ChatMessage = ({ message }: { message: any }) => {
   const isBot = message.type === "bot";
-  const isStatus = message.isStatus === true;
+  // const isStatus = message.isStatus === true;
 
   // Special handling for context objects (with "context" field)
   if (
@@ -145,11 +145,6 @@ export const ChatMessage = ({ message }: { message: any }) => {
               ? "bg-white border border-gray-200 text-gray-800 font-sans"
               : "bg-blue-500 text-white font-medium"
             } w-full`}
-          style={{
-            fontStyle: isStatus ? "italic" : "normal",
-            fontSize: isBot ? "310px" : "130px",
-            color: isStatus ? "#6B7280" : undefined,
-          }}
         >
           <div className="text-lg leading-relaxed break-words">
             {typeof message.content === "string"

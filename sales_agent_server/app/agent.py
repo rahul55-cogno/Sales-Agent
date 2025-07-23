@@ -14,7 +14,7 @@ from dotenv import load_dotenv
 from langgraph.checkpoint.memory import MemorySaver
 from email_fetching import gmail_fetch_emails
 from langchain_community.vectorstores.utils import filter_complex_metadata
-
+from typing import Optional
 
 load_dotenv()
 
@@ -27,12 +27,16 @@ class State(TypedDict):
     raw_text:dict
     context_data:list
     email:str
-    customer_name:str
+    customer_name: Optional[str]
+    previous_chats: Optional[list]
+    route: Optional[str]
 
 def fetch_emails(s:State):
+    print('From fetch_emails ',s['customer_name'])
     return gmail_fetch_emails(s["email"],s['customer_name'])
 
 def split_data_in_chunks(s:State):
+    print("Data Chunk Splitting")
     try:
         query=s['query']
         emai_dict=s['raw_text']
@@ -68,22 +72,60 @@ Attachments: {' || '.join(d['attachments']) if isinstance(d['attachments'], list
 
 def get_senders_name(s:State):
     query=s['query']
+    previous_chats = s.get('previous_chats', [])
+    context_str = "\n\n".join(previous_chats) if previous_chats else "No previous chats."
     prompt = ChatPromptTemplate.from_messages(
-    [
-        ("system", "I am giving you users query you have to extract name of the user for which user is querying about. Just return the name or None."),
-        ("user","Question:{question}")
-    ]
-)
+        [
+            ("system",
+             "You are an assistant that extracts the customer name the user is asking about."
+             " You can get clues from the current query and also the context of previous chats.\n"
+             "If you cannot identify a customer name, reply with exactly 'None'."),
+            ("user",
+             "Current Query: {query}\nPrevious Chats:\n{context}\n"
+             "Please extract only the customer name or respond 'None'.")
+        ]
+    )
     output_parser=StrOutputParser()
     chain=prompt|llm|output_parser
-    response=chain.invoke({'question':query})
+    response = chain.invoke({'query': query, 'context': context_str})
+    customer_name = response.strip()
+    if customer_name.lower() == 'none' or not customer_name:
+        customer_name = None
+
+    print("Getting Customers name ",customer_name)
+
     return {
-        "customer_name":[response],
+        "customer_name": customer_name,
     }
+
+def routing_node(s: State):
+    new_state = dict(s)
+    if s.get('customer_name'):
+        new_state['route'] = 'process_emails'
+    else:
+        new_state['route'] = 'skip_emails'
+        new_state['context_data'] = s.get('previous_chats', [])
+    return new_state
+
+def fetch_emails_wrapper(s: State):
+    if s.get('route') != 'process_emails':
+        return s  # skip: pass state unchanged
+    return fetch_emails(s)
+
+def split_data_in_chunks_wrapper(s: State):
+    if s.get('route') != 'process_emails':
+        return s
+    return split_data_in_chunks(s)
+
+def refinery_wrapper(s: State):
+    return refine_results_with_llm(s)
 
 def refine_results_with_llm(s:State):
     query=s['query']
-    data=s['context_data']
+    if s.get('customer_name'):
+        data=s['context_data']
+    else:
+        data=s['previous_chats']
     prompt = ChatPromptTemplate.from_messages(
     [
         ("system", 
@@ -94,7 +136,7 @@ def refine_results_with_llm(s:State):
     output_parser=StrOutputParser()
     chain=prompt|llm|output_parser
     response=chain.invoke({'question':query,'data': data})
-    # print(response)
+    print("Results refined from LLM")
     return {
         "messages":[response],
     }
@@ -109,28 +151,19 @@ llm=ChatGroq(model="llama-3.3-70b-versatile")
 
 graph = StateGraph(State)
 
-graph.add_node("fetch_emails",fetch_emails)
-graph.add_node("chunk_splitter",split_data_in_chunks)
-graph.add_node("refinery",refine_results_with_llm)
-graph.add_node("name_fetch",get_senders_name)
+graph.add_node("name_fetch", get_senders_name)
+graph.add_node("routing", routing_node)
+graph.add_node("fetch_emails_wrapper", fetch_emails_wrapper)
+graph.add_node("chunk_splitter_wrapper", split_data_in_chunks_wrapper)
+graph.add_node("refinery_wrapper", refinery_wrapper)
+
 
 graph.set_entry_point("name_fetch")
-graph.add_edge("name_fetch","fetch_emails")
-graph.add_edge("fetch_emails","chunk_splitter")
-graph.add_edge("chunk_splitter","refinery")
-graph.add_edge("refinery", END)
 
-memory=MemorySaver()
-final_workflow=graph.compile(checkpointer=memory)
+graph.add_edge("name_fetch", "routing")
+graph.add_edge("routing", "fetch_emails_wrapper")
+graph.add_edge("fetch_emails_wrapper", "chunk_splitter_wrapper")
+graph.add_edge("chunk_splitter_wrapper", "refinery_wrapper")
+graph.add_edge("refinery_wrapper", END)
 
-if __name__=="__main__":
-    query="Summarize last some emails"
-    config={"configurable":{"thread_id":"1"}}
-    events=final_workflow.stream(
-        {"query":query,"email":"workingforrahul@gmail.com"},
-        config,
-        stream_mode="values"
-    )
-    for event in events:
-        if event['messages'] and len(event['messages']):
-            print(event['messages'][-1].content)
+final_workflow=graph.compile()

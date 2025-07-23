@@ -26,6 +26,4 @@ export interface ChatMessage {
   type: 'user' | 'bot';
   content: any;
   timestamp: string;
-  data?: any;
-  isStatus?:boolean
 }

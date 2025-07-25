@@ -11,7 +11,7 @@ export const GoogleSignIn: React.FC<GoogleSignInProps> = ({ className = '' }) =>
 
   const handleRedirectLogin = () => {
     setIsLoading(true);
-    window.location.href = 'http://localhost:8000/login';
+    window.location.href = import.meta.env.VITE_BASE_URL+'/login';
   };
 
   return (

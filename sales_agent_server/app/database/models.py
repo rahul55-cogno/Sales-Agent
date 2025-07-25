@@ -23,9 +23,11 @@ class ChatSession(Base):
     __tablename__ = "chatsessions"
 
     id = Column(Integer, primary_key=True, index=True)
+    name = Column(String,nullable=False)
     user_id = Column(Integer, ForeignKey("users.id"), nullable=False)
 
     user = relationship("User", back_populates="chatsessions")
+    timestamp = Column(DateTime(timezone=True), server_default=func.now())
     chats = relationship("Chats", back_populates="chatsession", cascade="all, delete-orphan")
 
     @classmethod
@@ -33,8 +35,8 @@ class ChatSession(Base):
         return db.query(cls).filter(cls.id == session_id,cls.user_id==user_id).first()
 
     @classmethod
-    def create_session(cls, db: Session, user_id: int):
-        new_session = cls(user_id=user_id)
+    def create_session(cls, db: Session, user_id: int,name:str):
+        new_session = cls(user_id=user_id,name=name)
         db.add(new_session)
         db.commit()
         db.refresh(new_session)

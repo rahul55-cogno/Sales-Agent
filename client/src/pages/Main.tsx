@@ -51,7 +51,7 @@ function Main() {
     setIsLoading(true);
     setInput("");
 
-    await fetchEventSource("http://localhost:8000/query", {
+    await fetchEventSource(import.meta.env.VITE_BASE_URL + "/query", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ query: input.trim(), session_id: sessionId ? sessionId : null }),
@@ -63,13 +63,11 @@ function Main() {
           switch (event.event) {
             case "session_id":
               const newSessionId = event.data;
-              setSessions(prev=>[...prev,{id:newSessionId}])
               if (newSessionId) {
-                setSessionId(newSessionId);
+                selectSession(newSessionId)
                 const url = new URL(window.location.href);
                 url.searchParams.set("session_id", newSessionId);
                 window.history.replaceState({}, "", url.toString());
-                console.log("Updated URL with session_id:", newSessionId);
               }
               break;
             case "starting_agent":
@@ -152,7 +150,7 @@ function Main() {
   };
 
   async function getSessions() {
-    const res = await axios.get("http://localhost:8000/chat-sessions", {
+    const res = await axios.get(import.meta.env.VITE_BASE_URL + "/chat-sessions", {
       withCredentials: true
     });
     setSessions(res.data)
@@ -160,12 +158,12 @@ function Main() {
 
   useEffect(() => {
     getSessions();
-  }, [])
+  }, [sessionId])
 
-  const fetchChats = async(sessionId:any)=>{
-    if(!sessionId) return;
+  const fetchChats = async (sessionId: any) => {
+    if (!sessionId) return;
     try {
-      const res = await axios.get(`http://localhost:8000/chat-sessions/${sessionId}/chats`, {
+      const res = await axios.get(import.meta.env.VITE_BASE_URL + `/chat-sessions/${sessionId}/chats`, {
         withCredentials: true
       });
       setMessages(res.data)
@@ -174,6 +172,17 @@ function Main() {
     }
   }
 
+  const handleLogout = async () => {
+    try {
+      await axios.post(import.meta.env.VITE_BASE_URL + "/logout", {}, { withCredentials: true });
+      // Redirect to login or homepage
+      window.location.href = "/login"; // Adjust route as needed
+    } catch (error) {
+      console.error("Logout failed:", error);
+    }
+  };
+
+
   const selectSession = (sessionId: any) => {
     setSessionId(sessionId)
     const url = new URL(window.location.href);
@@ -181,7 +190,7 @@ function Main() {
     window.history.replaceState({}, "", url.toString());
   }
 
-  const newChat = ()=>{
+  const newChat = () => {
     setSessionId(null)
     const url = new URL(window.location.href);
     url.searchParams.delete("session_id");
@@ -189,9 +198,9 @@ function Main() {
     setMessages([])
   }
 
-  useEffect(()=>{
+  useEffect(() => {
     fetchChats(sessionId)
-  },[sessionId])
+  }, [sessionId])
 
   return (
     <div className="min-h-screen bg-gray-50">
@@ -203,6 +212,8 @@ function Main() {
               <MessageSquare className="h-8 w-8 text-blue-600 mr-3" />
               <h1 className="text-xl font-semibold text-gray-900">Sales Assistant</h1>
             </div>
+
+            {/* Navigation Tabs */}
             <nav className="flex space-x-1">
               {['chat', 'customers', 'stats'].map(tab => (
                 <button
@@ -219,10 +230,18 @@ function Main() {
                   {tab.charAt(0).toUpperCase() + tab.slice(1)}
                 </button>
               ))}
+
+              <button
+                onClick={handleLogout}
+                className="ml-4 px-4 py-2 rounded-lg bg-red-500 text-white hover:bg-red-600 transition-colors"
+              >
+                Logout
+              </button>
             </nav>
           </div>
         </div>
       </header>
+
 
       <div className='flex justify-around space-x-6 items-center px-7'>
         <main className="py-8 flex justify-center">
@@ -235,7 +254,7 @@ function Main() {
               </p>
 
               {/* New Chat Button */}
-              <button className="w-[90%] mx-auto mt-4 mb-3 text-center bg-blue-500 text-white font-semibold py-3 rounded-lg hover:bg-blue-400 transition" onClick={()=>{newChat()}}>
+              <button className="w-[90%] mx-auto mt-4 mb-3 text-center bg-blue-500 text-white font-semibold py-3 rounded-lg hover:bg-blue-400 transition" onClick={() => { newChat() }}>
                 + New Chat
               </button>
 
@@ -246,10 +265,10 @@ function Main() {
                     {sessions.map((s: any, i: number) => (
                       <li
                         key={i}
-                        className={`text-white px-4 py-3 rounded-xl shadow-md hover:bg-blue-600 transition cursor-pointer flex items-center justify-between ${sessionId===s.id ? 'bg-blue-700' : 'bg-blue-500'}`}
+                        className={`text-white px-4 py-3 rounded-xl shadow-md hover:bg-blue-600 transition cursor-pointer flex items-center justify-between ${sessionId === s.id ? 'bg-blue-700' : 'bg-blue-500'}`}
                         onClick={() => selectSession(s.id)}
                       >
-                        <span className="font-semibold">Session_{s.id}</span>
+                        <span className="font-semibold">{s.name}</span>
                       </li>
                     ))}
                   </ul>

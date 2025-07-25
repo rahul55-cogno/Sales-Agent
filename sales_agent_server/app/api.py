@@ -1,7 +1,9 @@
 from fastapi import FastAPI, Request,Depends
 from fastapi.middleware.cors import CORSMiddleware
+from sqlalchemy import desc
 from agent import final_workflow
 from fastapi.responses import RedirectResponse
+from fastapi.responses import JSONResponse
 from fastapi import HTTPException
 import httpx
 from google.oauth2 import id_token
@@ -98,14 +100,13 @@ def event_stream(query, user_email,session_id:str,db:Session,existed:bool):
         )
 
         for event in events:
-            # print(event.get('raw_text'))
-            if 'customer_name' in event and not sent_flags['customer_name']:
+            if 'customer_name' in event and event['customer_name'] and not sent_flags['customer_name']:
                 data = {"customer_name": event['customer_name']}
                 yield f"event: customer_name\ndata: {json.dumps(data)}\n\n"
-                message="Not able to identify customer"
-                if 'customer_name' in event and event['customer_name']:
+                print(event['customer_name'])
+                message = ""
+                if event['customer_name']!=None:
                     message = "Identified Customer as " + str(event['customer_name'])
-
                 Chats.create_chat(
                     db=db,
                     chatsession_id=session_id,
@@ -158,10 +159,10 @@ def event_stream(query, user_email,session_id:str,db:Session,existed:bool):
                 sent_flags['raw_text'] = True
                 time.sleep(0.3)
 
-            if 'messages' in event and not sent_flags['final_answer'] and len(event['messages']) > 0:
+            if 'final_summary' in event and event['final_summary'] and not sent_flags['final_answer']:
                 yield f"event: summary_1\ndata: {json.dumps({"message":"Thanks for Patience. Your final response is almose ready...."})}\n\n"
                 time.sleep(1.6)
-                summary_text = event['messages'][-1].content
+                summary_text = event['final_summary']
                 formatted_summary = {
                     "message": summary_text
                 }
@@ -199,7 +200,7 @@ async def run_agent(request: Request, user_email: str = Depends(get_current_user
         else:
             existed=True
     else:
-        chat_session = ChatSession.create_session(db=db,user_id=user.id)
+        chat_session = ChatSession.create_session(db=db,user_id=user.id,name=query)
         if(not chat_session):
             return {"error": "Session not created"}
         session_id=chat_session.id
@@ -293,10 +294,17 @@ def get_current_user(request: Request):
         raise HTTPException(status_code=401, detail="Invalid token")
     return payload["sub"]
 
+@app.post("/logout")
+def logout():
+    response = JSONResponse(content={"message": "Logged out successfully"})
+    response.delete_cookie(key="access_token")
+    return response
+
 
 class ChatSessionOut(BaseModel):
     id: int
     user_id: int
+    name:str
 
     class Config:
         orm_mode = True
@@ -313,7 +321,7 @@ def get_chat_sessions(
         raise HTTPException(status_code=404, detail="User not found")
 
     # Query sessions for user
-    sessions = db.query(ChatSession).filter(ChatSession.user_id == user.id).all()
+    sessions = db.query(ChatSession).filter(ChatSession.user_id == user.id).order_by(desc(ChatSession.timestamp)).all()
     return sessions
 
 @app.get("/chat-sessions/{session_id}/chats", response_model=List[ChatOut])

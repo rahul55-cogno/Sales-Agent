@@ -1,35 +1,34 @@
-import { BrowserRouter, Route, Routes } from 'react-router';
+import { BrowserRouter, Route, Routes } from 'react-router-dom';
 import Main from './pages/Main';
 import { GoogleSignIn } from './components/GoogleSignIn';
 import { AuthLayout } from './components/AuthLayout';
-import { useState } from 'react';
 import Landing from './pages/Landing';
-
+import { ProtectedRoute } from './components/Protected';
 
 const App = () => {
-  const [user, setUser] = useState<any>(null);
-  const [showSuccess, setShowSuccess] = useState(false);
-
-  const handleSignIn = (userData: any) => {
-    setUser(userData);
-    setShowSuccess(true);
-    setTimeout(() => {
-      setShowSuccess(false);
-    }, 3000);
-  };
-
   return (
     <BrowserRouter>
       <Routes>
-        <Route element={<Main />} path='/' />
-        <Route element={<Landing />} path='/home' />
-        <Route element={<AuthLayout>
-          <GoogleSignIn />
-        </AuthLayout>}
-          path='/login' />
+        <Route
+          path="/"
+          element={
+            <ProtectedRoute>
+              <Main />
+            </ProtectedRoute>
+          }
+        />
+        <Route element={<Landing />} path="/home" />
+        <Route
+          path="/login"
+          element={
+            <AuthLayout>
+              <GoogleSignIn/>
+            </AuthLayout>
+          }
+        />
       </Routes>
     </BrowserRouter>
-  )
-}
+  );
+};
 
-export default App
+export default App;

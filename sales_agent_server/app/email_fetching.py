@@ -106,4 +106,4 @@ def gmail_fetch_emails(email: str,senders_name:str) -> dict:
             "attachments": attachments_text,
         })
 
-    return {"raw_text": received_messages}
+    return {"raw_text": received_messages,"next_agent":"supervisor"}

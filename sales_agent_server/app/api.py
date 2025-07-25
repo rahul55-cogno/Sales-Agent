@@ -259,7 +259,7 @@ async def auth_callback(request: Request):
 
     refresh_token = tokens.get('refresh_token')
 
-    response=RedirectResponse(f"http://localhost:5173/")
+    response=RedirectResponse(os.getenv("FRONTEND_URL"))
 
     db = SessionLocal()
     user = db.query(User).filter(User.email == email).first()
@@ -272,7 +272,7 @@ async def auth_callback(request: Request):
     db.commit()
 
     jwt_token = create_jwt({"sub": email})
-    response = RedirectResponse(url="http://localhost:5173/")
+    response = RedirectResponse(url=os.getenv("FRONTEND_URL"))
     response.set_cookie(
         key="access_token",
         value=jwt_token,

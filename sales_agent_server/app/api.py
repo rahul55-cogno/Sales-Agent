@@ -347,4 +347,4 @@ def get_chats_of_session(
 
 if __name__=="__main__":
     import uvicorn 
-    uvicorn.run(app=app,port=8000,host='127.0.0.1')
+    uvicorn.run(app=app,port=os.getenv("PORT"),host='127.0.0.1')
